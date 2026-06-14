@@ -1,0 +1,40 @@
+package com.example.subcan.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+// Light theme - Blue
+val BluePrimary = Color(0xFF0D47A1)
+val BlueOnPrimary = Color(0xFFFFFFFF)
+val BluePrimaryContainer = Color(0xFFD4E3FF)
+val BlueOnPrimaryContainer = Color(0xFF001C3A)
+val BlueSecondary = Color(0xFF535F70)
+val BlueOnSecondary = Color(0xFFFFFFFF)
+val BlueSecondaryContainer = Color(0xFFD7E3F8)
+val BlueOnSecondaryContainer = Color(0xFF101C2B)
+val BlueTertiary = Color(0xFF00897B)
+val BlueOnTertiary = Color(0xFFFFFFFF)
+val BlueTertiaryContainer = Color(0xFFA0F0E4)
+val BlueOnTertiaryContainer = Color(0xFF002822)
+val BlueSurface = Color(0xFFF8F9FF)
+val BlueOnSurface = Color(0xFF191C20)
+val BlueSurfaceVariant = Color(0xFFDFE2EB)
+val BlueOnSurfaceVariant = Color(0xFF43474E)
+val BlueOutline = Color(0xFF73777F)
+
+// Dark theme - Blue
+val BluePrimaryDark = Color(0xFFA5C8FF)
+val BlueOnPrimaryDark = Color(0xFF00315E)
+val BluePrimaryContainerDark = Color(0xFF004785)
+val BlueOnPrimaryContainerDark = Color(0xFFD4E3FF)
+val BlueSecondaryDark = Color(0xFFBBC7DB)
+val BlueOnSecondaryDark = Color(0xFF263141)
+val BlueSecondaryContainerDark = Color(0xFF3C4858)
+val BlueOnSecondaryContainerDark = Color(0xFFD7E3F8)
+val BlueTertiaryDark = Color(0xFF80CBC4)
+val BlueOnTertiaryDark = Color(0xFF003731)
+val BlueTertiaryContainerDark = Color(0xFF005048)
+val BlueOnTertiaryContainerDark = Color(0xFFA0F0E4)
+val BlueSurfaceDark = Color(0xFF101418)
+val BlueOnSurfaceDark = Color(0xFFE0E2E8)
+val BlueSurfaceVariantDark = Color(0xFF43474E)
+val BlueOnSurfaceVariantDark = Color(0xFFC3C6CF)
