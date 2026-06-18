@@ -14,6 +14,9 @@ interface SubscriptionDao {
     @Query("SELECT * FROM subscriptions ORDER BY nextBillingDate ASC")
     fun getAllSubscriptions(): Flow<List<Subscription>>
 
+    @Query("SELECT * FROM subscriptions ORDER BY nextBillingDate ASC")
+    suspend fun getAllSubscriptionsSnapshot(): List<Subscription>
+
     @Query("SELECT * FROM subscriptions WHERE isActive = 1 ORDER BY nextBillingDate ASC")
     fun getActiveSubscriptions(): Flow<List<Subscription>>
 
@@ -26,6 +29,9 @@ interface SubscriptionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(subscription: Subscription): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(subscriptions: List<Subscription>)
+
     @Update
     suspend fun update(subscription: Subscription)
 
@@ -34,6 +40,9 @@ interface SubscriptionDao {
 
     @Query("DELETE FROM subscriptions WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM subscriptions")
+    suspend fun deleteAll()
 
     @Query("SELECT SUM(price) FROM subscriptions WHERE isActive = 1 AND billingCycle = 'MONTHLY'")
     fun getTotalMonthlyDirect(): Flow<Int?>
