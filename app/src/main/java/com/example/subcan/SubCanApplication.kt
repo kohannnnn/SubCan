@@ -6,6 +6,9 @@ import com.example.subcan.data.backup.BackupRepository
 import com.example.subcan.data.backup.DefaultBackupRepository
 import com.example.subcan.data.backup.RoomSubscriptionBackupDataSource
 import com.example.subcan.data.db.AppDatabase
+import com.example.subcan.data.drive.DefaultDriveBackupDataSource
+import com.example.subcan.data.drive.DriveBackupDataSource
+import com.example.subcan.data.drive.HttpDriveApiClient
 import com.example.subcan.data.repository.SubscriptionRepository
 import com.example.subcan.notification.NotificationHelper
 
@@ -20,6 +23,9 @@ class SubCanApplication : Application() {
             dataSource = RoomSubscriptionBackupDataSource(database),
             appVersion = BuildConfig.VERSION_NAME
         )
+    }
+    val driveBackupDataSource: DriveBackupDataSource by lazy {
+        DefaultDriveBackupDataSource(HttpDriveApiClient())
     }
 
     override fun onCreate() {

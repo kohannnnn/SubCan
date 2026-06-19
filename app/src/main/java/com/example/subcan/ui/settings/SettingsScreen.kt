@@ -1,7 +1,9 @@
 package com.example.subcan.ui.settings
 
+import android.app.Activity
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +17,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.History
@@ -50,9 +54,16 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.subcan.BuildConfig
+import com.example.subcan.data.drive.DRIVE_APP_DATA_SCOPE
 import com.example.subcan.ui.theme.SubCanTheme
+import com.google.android.gms.auth.api.identity.AuthorizationRequest
+import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.Scope
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -66,6 +77,14 @@ fun SettingsRoute(onHistoryClick: () -> Unit, viewModel: SettingsViewModel = vie
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     var pendingExportJson by remember { mutableStateOf<String?>(null) }
+    val driveAuthorizationClient = remember(context) {
+        Identity.getAuthorizationClient(context)
+    }
+    val driveAuthorizationRequest = remember {
+        AuthorizationRequest.builder()
+            .setRequestedScopes(listOf(Scope(DRIVE_APP_DATA_SCOPE)))
+            .build()
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -120,6 +139,28 @@ fun SettingsRoute(onHistoryClick: () -> Unit, viewModel: SettingsViewModel = vie
         }
     }
 
+    val driveAuthorizationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { activityResult ->
+        val resultIntent = activityResult.data
+        if (activityResult.resultCode != Activity.RESULT_OK || resultIntent == null) {
+            viewModel.onAction(SettingsAction.DriveAuthorizationCanceled)
+        } else {
+            try {
+                val authorizationResult =
+                    driveAuthorizationClient.getAuthorizationResultFromIntent(resultIntent)
+                val accessToken = authorizationResult.accessToken
+                if (accessToken.isNullOrBlank()) {
+                    viewModel.onAction(SettingsAction.DriveAuthorizationFailed)
+                } else {
+                    viewModel.onAction(SettingsAction.DriveAuthorizationGranted(accessToken))
+                }
+            } catch (exception: ApiException) {
+                viewModel.onAction(SettingsAction.DriveAuthorizationFailed)
+            }
+        }
+    }
+
     LaunchedEffect(viewModel) {
         viewModel.uiEffect.collect { effect ->
             when (effect) {
@@ -136,6 +177,30 @@ fun SettingsRoute(onHistoryClick: () -> Unit, viewModel: SettingsViewModel = vie
 
                 SettingsEffect.LaunchOpenBackupDocument -> {
                     openDocumentLauncher.launch(arrayOf("application/json"))
+                }
+
+                SettingsEffect.RequestDriveAuthorization -> {
+                    driveAuthorizationClient.authorize(driveAuthorizationRequest)
+                        .addOnSuccessListener { authorizationResult ->
+                            val pendingIntent = authorizationResult.pendingIntent
+                            if (authorizationResult.hasResolution() && pendingIntent != null) {
+                                driveAuthorizationLauncher.launch(
+                                    IntentSenderRequest.Builder(pendingIntent.intentSender).build()
+                                )
+                            } else {
+                                val accessToken = authorizationResult.accessToken
+                                viewModel.onAction(
+                                    if (accessToken.isNullOrBlank()) {
+                                        SettingsAction.DriveAuthorizationFailed
+                                    } else {
+                                        SettingsAction.DriveAuthorizationGranted(accessToken)
+                                    }
+                                )
+                            }
+                        }
+                        .addOnFailureListener {
+                            viewModel.onAction(SettingsAction.DriveAuthorizationFailed)
+                        }
                 }
 
                 is SettingsEffect.ShowSnackbar -> {
@@ -238,7 +303,7 @@ fun SettingsScreen(
                             Icon(Icons.Filled.FileUpload, contentDescription = null)
                         },
                         trailingContent = {
-                            if (uiState.isBackupLoading) {
+                            if (uiState.activeBackupOperation == SettingsBackupOperation.FILE_EXPORT) {
                                 CircularProgressIndicator(modifier = Modifier.size(24.dp))
                             }
                         },
@@ -255,13 +320,71 @@ fun SettingsScreen(
                         leadingContent = {
                             Icon(Icons.Filled.FileDownload, contentDescription = null)
                         },
+                        trailingContent = {
+                            if (uiState.activeBackupOperation == SettingsBackupOperation.FILE_IMPORT) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            }
+                        },
                         modifier = Modifier.clickable(enabled = !uiState.isBackupLoading) {
                             uiAction(SettingsAction.ImportClick)
                         }
                     )
 
                     Text(
-                        text = "サブスク登録情報をJSONファイルとして保存できます。Google Drive連携は今後対応予定です。",
+                        text = "サブスク登録情報を端末上のJSONファイルとして保存できます。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                    )
+                }
+            }
+
+            Text(
+                text = "Google Drive",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Card {
+                Column {
+                    ListItem(
+                        headlineContent = { Text("Google Driveにバックアップ") },
+                        supportingContent = { Text("アプリ専用領域へ最新の登録情報を保存します") },
+                        leadingContent = {
+                            Icon(Icons.Filled.CloudUpload, contentDescription = null)
+                        },
+                        trailingContent = {
+                            if (uiState.activeBackupOperation == SettingsBackupOperation.DRIVE_UPLOAD) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            }
+                        },
+                        modifier = Modifier.clickable(enabled = !uiState.isBackupLoading) {
+                            uiAction(SettingsAction.DriveBackupClick)
+                        }
+                    )
+
+                    HorizontalDivider()
+
+                    ListItem(
+                        headlineContent = { Text("Google Driveから復元") },
+                        supportingContent = { Text("Drive上のバックアップで登録情報を置き換えます") },
+                        leadingContent = {
+                            Icon(Icons.Filled.CloudDownload, contentDescription = null)
+                        },
+                        trailingContent = {
+                            if (uiState.activeBackupOperation == SettingsBackupOperation.DRIVE_RESTORE) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            }
+                        },
+                        modifier = Modifier.clickable(enabled = !uiState.isBackupLoading) {
+                            uiAction(SettingsAction.DriveRestoreClick)
+                        }
+                    )
+
+                    Text(
+                        text = uiState.lastDriveBackupAt?.let { instant ->
+                            "最終バックアップ: ${driveBackupDateFormatter.format(instant)}"
+                        } ?: "Google Driveの非表示アプリ専用領域を使用します。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
@@ -315,6 +438,9 @@ fun SettingsScreen(
         )
     }
 }
+
+private val driveBackupDateFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm").withZone(ZoneId.systemDefault())
 
 private fun readBackupJson(inputStream: java.io.InputStream?, uri: Uri): String {
     val stream = inputStream ?: throw IOException("Unable to open backup source: $uri")
